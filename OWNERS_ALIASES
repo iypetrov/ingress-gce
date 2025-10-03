@@ -1,0 +1,19 @@
+# See the OWNERS docs at https://go.k8s.io/owners
+
+aliases:
+  ingress-gce-reviewers:
+  - AndreasBurger
+  - axel7born
+  - DockToFuture
+  - domdom82
+  - hebelsan
+  - kon-angelo
+  - ScheererJ
+  ingress-gce-approvers:
+  - AndreasBurger
+  - axel7born
+  - DockToFuture
+  - domdom82
+  - hebelsan
+  - kon-angelo
+  - ScheererJ
