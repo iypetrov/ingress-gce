@@ -25,59 +25,58 @@ defaults:
     shell: bash
 
 jobs:
-  build-push-release:
+  prepare:
+    uses: gardener/cc-utils/.github/workflows/prepare.yaml@master
+    with:
+      mode: ${{ inputs.mode }}
+      version-commit-callback-action-path: .github/actions/prepare-release
+      checkout-fetch-depth: 0
     permissions:
-      # give GITHUB_TOKEN write permissions
+      contents: read
+      pull-requests: write
+
+  oci-images:
+    name: Build OCI-Images
+    needs:
+      - prepare
+    permissions:
+      contents: read
       packages: write
-      contents: write
       id-token: write
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout the gardener/ingress-gce repository
-        uses: actions/checkout@v4
+    secrets: inherit
+    uses: gardener/cc-utils/.github/workflows/oci-ocm.yaml@master
+    strategy:
+      matrix:
+        args:
+          - name: ingress-gce
+            target: ingress-gce
+            oci-repository: gardener/extensions/ingress-gce
+            ocm-labels:
+              name: gardener.cloud/cve-categorisation
+              value:
+                network_exposure: protected
+                authentication_enforced: false
+                user_interaction: gardener-operator
+                confidentiality_requirement: high
+                integrity_requirement: high
+                availability_requirement: high
+    with:
+      name: ${{ matrix.args.name }}
+      version: ${{ needs.prepare.outputs.version }}
+      target: ${{ matrix.args.target }}
+      oci-registry: ${{ matrix.args.oci-registry || needs.prepare.outputs.oci-registry }}
+      oci-repository: ${{ matrix.args.oci-repository }}
+      oci-platforms: linux/amd64,linux/arm64
+      ocm-labels: ${{ toJSON(matrix.args.ocm-labels) }}
+      extra-tags: latest
 
-      - name: Checkout the kubernetes/ingress-gce repository
-        uses: actions/checkout@v4
-        with:
-          repository: 'kubernetes/ingress-gce'
-          path: './ingress-gce'
-          persist-credentials: false
-          ref: '${{ inputs.ingress_gce_version }}'
-
-      - name: Authenticate against Google-Artifact-Registry
-        id: auth
-        uses: google-github-actions/auth@v2
-        with:
-          token_format: access_token
-          project_id: ${{ env.GCP_PROJECT_ID }}
-          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
-          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
-      - name: Login to registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.IMAGE_REGISTRY }}
-          username: oauth2accesstoken
-          password: ${{ steps.auth.outputs.access_token }}
-
-      - name: Docker setup buildx
-        uses: docker/setup-buildx-action@v3
-        with:
-          platforms: ${{ env.PLATFORMS }}
-
-      - name: Build and push Docker images
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          tags: |
-            ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_REPO }}:${{ env.IMAGE_TAG }}
-          push: true
-          platforms: ${{ env.PLATFORMS }}
-
-      - name: Create new release
-        uses: ncipollo/release-action@v1
-        with:
-          tag: ${{ inputs.release_tag }}
-          makeLatest: true
-          body: |
-            ## Docker Images
-            * ingress-gce: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_REPO }}:${{ env.IMAGE_TAG }}
+  release-to-github:
+    uses: gardener/cc-utils/.github/workflows/release.yaml@master
+    secrets: inherit
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      pull-requests: write
+    with:
+      release-commit-target: tag
