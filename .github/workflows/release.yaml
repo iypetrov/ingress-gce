@@ -1,80 +1,35 @@
-name: Build, push and release
+name: Release
 on:
   workflow_dispatch:
     inputs:
-      release_tag:
-        description: 'New release git/docker tag to publish'
-        required: true
-        type: string
-      ingress_gce_version:
-        description: 'kubernetes/ingress-gce version to checkout on build'
-        required: true
-        type: string
-      mode:
-        required: true
-        type: string
-        default: snapshot
-        description: |
-          the mode to use. either `snapshot` or `release`. Will affect effective version, as well
-          as target-oci-registry.
+      next-version:
+        type: choice
+        options:
+          - bump-minor
+          - bump-patch
 
-defaults:
-  run:
-    shell: bash
 
 jobs:
-  prepare:
-    uses: gardener/cc-utils/.github/workflows/prepare.yaml@master
-    with:
-      mode: ${{ inputs.mode }}
-      version-commit-callback-action-path: .github/actions/prepare-release
-      checkout-fetch-depth: 0
+  build:
+    uses: ./.github/workflows/build.yaml
     permissions:
-      contents: read
-      pull-requests: write
-
-  oci-images:
-    name: Build OCI-Images
-    needs:
-      - prepare
-    permissions:
-      contents: read
-      packages: write
+      contents: write
       id-token: write
-    secrets: inherit
-    uses: gardener/cc-utils/.github/workflows/oci-ocm.yaml@master
-    strategy:
-      matrix:
-        args:
-          - name: ingress-gce
-            target: ingress-gce
-            oci-repository: gardener/extensions/ingress-gce
-            ocm-labels:
-              name: gardener.cloud/cve-categorisation
-              value:
-                network_exposure: protected
-                authentication_enforced: false
-                user_interaction: gardener-operator
-                confidentiality_requirement: high
-                integrity_requirement: high
-                availability_requirement: high
+      packages: write
     with:
-      name: ${{ matrix.args.name }}
-      version: ${{ needs.prepare.outputs.version }}
-      target: ${{ matrix.args.target }}
-      oci-registry: ${{ matrix.args.oci-registry || needs.prepare.outputs.oci-registry }}
-      oci-repository: ${{ matrix.args.oci-repository }}
-      oci-platforms: linux/amd64,linux/arm64
-      ocm-labels: ${{ toJSON(matrix.args.ocm-labels) }}
-      extra-tags: latest
+      mode: release
 
-  release-to-github:
+  release-to-github-and-bump:
     uses: gardener/cc-utils/.github/workflows/release.yaml@master
+    needs:
+      - build
     secrets: inherit
     permissions:
       contents: write
-      packages: write
       id-token: write
-      pull-requests: write
+      packages: write
     with:
-      release-commit-target: tag
+      release-commit-target: branch
+      next-version: ${{ inputs.next-version }}
+      next-version-callback-action-path:
+      slack-channel-id:
