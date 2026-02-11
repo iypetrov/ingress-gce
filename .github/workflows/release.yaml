@@ -10,15 +10,13 @@ on:
         description: 'kubernetes/ingress-gce version to checkout on build'
         required: true
         type: string
-
-env:
-  IMAGE_REGISTRY: europe-docker.pkg.dev
-  IMAGE_REPO: gardener-project/releases/gardener/ingress-gce
-  IMAGE_TAG: ${{ inputs.release_tag }}
-  GCP_PROJECT_ID: gardener-project
-  GCP_SERVICE_ACCOUNT: ocm-ci-opensource@gardener-project.iam.gserviceaccount.com
-  WORKLOAD_IDENTITY_PROVIDER: projects/694386720375/locations/global/workloadIdentityPools/github-actions/providers/github-actions-provider
-  PLATFORMS: linux/amd64,linux/arm64
+      mode:
+        required: true
+        type: string
+        default: snapshot
+        description: |
+          the mode to use. either `snapshot` or `release`. Will affect effective version, as well
+          as target-oci-registry.
 
 defaults:
   run:
