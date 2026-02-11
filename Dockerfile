@@ -1,11 +1,26 @@
-FROM golang:1.26.0 AS builder
-ENV CGO_ENABLED=0
-COPY . .
-WORKDIR ingress-gce
-RUN go install -v ./cmd/glbc
+FROM golang:1.26.0 AS builder-amd64
+ARG ARCH=amd64
 
-# ### actual container
+FROM golang:1.26.0 AS builder-arm64
+ARG ARCH=arm64
+
+FROM builder-$TARGETARCH AS builder
+
+ARG EFFECTIVE_VERSION
+WORKDIR /tmp/ingress-gce
+
+RUN git clone https://github.com/kubernetes/ingress-gce.git -b $EFFECTIVE_VERSION --depth 1 .
+
+RUN GO111MODULE=on CGO_ENABLED=0 GOOS=linux GOARCH="$ARCH" GOPROXY=${GOPROXY} go build \
+    -trimpath \
+    -ldflags="${LDFLAGS}" \
+    -o=glbc \
+    ./cmd/glbc
+
+### actual container
+
 FROM gcr.io/distroless/static:latest
-COPY --from=builder /go/bin/glbc /glbc
 
-ENTRYPOINT ["/glbc"]
+COPY --from=builder /tmp/ingress-gce/glbc /bin/glbc
+
+ENTRYPOINT ["/bin/glbc"]
